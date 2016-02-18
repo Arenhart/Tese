@@ -1,0 +1,232 @@
+'''
+Created on 12/12/2015
+
+@author: Rafael
+'''
+
+from __future__ import division
+import random
+import time
+
+
+print time.clock()
+
+SIZE = (52, 52, 52)
+ITERATIONS = 1
+CLASSIC = 1
+SECTOR = 1
+DBB = 1
+SPHERES = ((1,10000),(100,10))
+
+# Helper functions
+
+def create_sphere(index, radius):
+    x, y, z = random.random()*SIZE[0], random.random()*SIZE[1], random.random()*SIZE[2]
+    bound_box = {}
+    bound_box['x-'] = 0
+    bound_box['x+'] = 0
+    bound_box['y-'] = 0
+    bound_box['y+'] = 0
+    bound_box['z-'] = 0
+    bound_box['z+'] = 0
+    return {'center' : [x,y,z],
+            'radius' : radius,
+            'box' : bound_box,
+            'index' : index,
+            'sector' : None
+            }
+
+def check_contact(sphere1, sphere2):
+    squared_distance = calc_squared_distance(sphere1['center'],sphere2['center'])
+    if squared_distance <= (sphere1['radius']+sphere2['radius']):
+        return True
+    else:
+        return False
+    
+def calc_squared_distance(vector1,vector2):
+    return sum([(i-j)**2 for i,j in zip(vector1,vector2)])
+
+def calculate_box(sphere):
+    x, y, z = sphere['center']
+    radius = sphere['radius']
+    sphere['box']['x-'] = x-radius
+    sphere['box']['x+'] = x+radius
+    sphere['box']['y-'] = y-radius
+    sphere['box']['y+'] = y+radius
+    sphere['box']['z-'] = z-radius
+    sphere['box']['z+'] = z+radius
+    
+def fill_cube(radiuses = ((1,200),(100,100)) ):
+    sphere_list = []
+    i = 0
+    for template in radiuses:
+
+        radius = template[0]
+        ammount = template[1]
+        k = 0
+
+        while k < ammount:
+
+            sphere_list.append(create_sphere(i,radius))
+            k += 1
+            i += 1
+
+    return sphere_list
+
+def fill_sectors(sphere_list, sector_count,sector_size):
+
+    sectors = [ [ [ [] for _ in range(sector_count[0]+1)] for _ in range(sector_count[1]+1)] for _ in range(sector_count[2]+1)]
+    for sphere in sphere_list:
+        x, y, z = sphere['center']
+        Sx, Sy, Sz = int(x//sector_size), int(y//sector_size), int(z//sector_size)
+        sphere['sector'] = (Sx,Sy,Sz)
+        sectors[Sx][Sy][Sz].append(sphere['index'])
+    
+    print 'sectors filled'    
+    return sectors
+
+# End of helper functions
+
+def classic_contact_detect(sphere_list):
+    checksum = 0
+    for sphere1 in sphere_list:
+        for sphere2 in sphere_list[sphere1['index']+1:]:
+            if check_contact(sphere1,sphere2):
+                checksum += (sphere1['index']+1)**2*(sphere2['index']+1)**2
+    return checksum           
+            
+def sector_contact_detect(sphere_list):
+    checksum = 0
+    max_radius = max([sphere['radius'] for sphere in sphere_list])
+    sector_size = max_radius*2
+    sector_count = (int(SIZE[0]//sector_size),
+                   int(SIZE[1]//sector_size),
+                   int(SIZE[2]//sector_size)
+                   )
+    
+    sectors = fill_sectors(sphere_list,sector_count,sector_size)
+
+    for sphere in sphere_list:
+        
+        Sx, Sy, Sz = sphere['sector']
+        for sx, sy, sz in [(i,j,k) for i in (Sx-1,Sx,Sx+1) for j in (Sy-1,Sy,Sy+1) for k in (Sz-1, Sz, Sz+1)]:
+            if sx < 0 or sy < 0 or sz < 0 : continue
+            try:
+                neighbours = [sphere_list[i] for i in sectors[sx][sy][sz]]
+
+            except: 
+                continue
+            for neighbour in neighbours:
+                if neighbour['index'] > sphere['index']:
+                    if check_contact(sphere,neighbour):
+                        checksum += (sphere['index']+1)**2*(neighbour['index']+1)**2
+    return checksum
+                    
+def DBB_contact_detect(sphere_list):
+    
+    checksum = 0
+    
+    events_in_x = []
+    events_in_y = []
+    events_in_z = []
+    print 'begin'
+    for sphere in sphere_list:
+        calculate_box(sphere)
+        events_in_x.append((sphere['box']['x-'],sphere['index']))
+        events_in_x.append((sphere['box']['x+'],sphere['index']))
+        events_in_y.append((sphere['box']['y-'],sphere['index']))
+        events_in_y.append((sphere['box']['y+'],sphere['index']))
+        events_in_z.append((sphere['box']['z-'],sphere['index']))
+        events_in_z.append((sphere['box']['z+'],sphere['index']))
+    print 'events lists set'    
+    events_in_x.sort()
+    events_in_y.sort()
+    events_in_z.sort()
+           
+    open_in_x = []
+    open_in_y = []
+    open_in_z = []
+    
+    pairs_in_x = []
+    pairs_in_y = []
+    pairs_in_z = []
+    
+    print 'events lists sorted'
+    for event in events_in_x:
+        if event[1] not in open_in_x:
+            open_in_x.append(event[1])
+        else:
+            open_in_x.remove(event[1])
+            for opened in open_in_x: 
+                if opened > event[1]:
+                    pairs_in_x.append((event[1],opened))
+                else: pairs_in_x.append((opened,event[1]))
+                   
+    print 'overlaps in x listed'               
+    for event in events_in_y:
+        if event[1] not in open_in_y:
+            open_in_y.append(event[1])
+        else:
+            open_in_y.remove(event[1])
+            for opened in open_in_y:
+                if opened > event[1]:
+                    pairs_in_y.append((event[1],opened))
+                else: pairs_in_y.append((opened,event[1]))
+                    
+    for event in events_in_z:
+        if event[1] not in open_in_z:
+            open_in_z.append(event[1])
+        else:
+            open_in_z.remove(event[1])
+            for opened in open_in_z:
+                if opened > event[1]:
+                    pairs_in_z.append((event[1],opened))
+                else: pairs_in_z.append((opened,event[1]))
+    print 'all overlaps listed'                
+    near_pairs = list(set(pairs_in_x) & set(pairs_in_y) & set(pairs_in_z))
+    
+    print 'overlap lists intersected'
+    
+    for pair in near_pairs:
+        sphere1 = sphere_list[pair[0]]
+        sphere2 = sphere_list[pair[1]]
+        if check_contact(sphere1,sphere2):
+            checksum += (sphere1['index']+1)**2*(sphere2['index']+1)**2
+        
+    return checksum
+        
+
+
+classic_time = 0
+sector_time = 0
+DBB_time = 0
+
+classic_cs = 0
+sector_cs = 0
+DBB_cs = 0
+
+
+for i in range(ITERATIONS):
+    
+    sphere_list = fill_cube(SPHERES)
+    
+    classic_time -= time.clock()
+    if CLASSIC: classic_cs += classic_contact_detect(sphere_list)
+    classic_time += time.clock()
+    
+    sector_time -= time.clock()
+    if SECTOR: sector_cs += sector_contact_detect(sphere_list)
+    sector_time += time.clock()
+    
+    DBB_time -= time.clock()
+    if DBB: DBB_cs += DBB_contact_detect(sphere_list)
+    DBB_time += time.clock()
+    
+
+print 'Classic - time: ' + str(classic_time/ITERATIONS) + '  checksum: ' + str(classic_cs)
+print 'Sector - time: ' + str(sector_time/ITERATIONS) + '  checksum: ' + str(sector_cs)
+print 'DBB - time: ' + str(DBB_time/ITERATIONS) + '  checksum: ' + str(DBB_cs)
+
+    
+    
+print time.clock()
