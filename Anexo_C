@@ -1,0 +1,99 @@
+'''
+Created on 10/09/2014
+
+@author: Rafael
+'''
+from __future__ import division
+import math
+import time
+
+print time.clock()
+
+ASPECT_RATIO = 2 # AR = a/b
+MAX_SIZE = 100000
+
+b = math.sqrt(MAX_SIZE/ASPECT_RATIO) # eixo menor
+a = b*ASPECT_RATIO # eixo maior
+radius = b
+ellipse_area = math.pi*a*b
+extended_area = math.pi*(b+a)*(2*b)
+max_x = int(math.ceil(a + b))
+max_y = int(math.ceil(2*b))
+
+def in_ellipse(x,y):
+    if (x**2/a**2)+(y**2/b**2) <= 1 : return True
+    else: return False
+    
+def in_extended_ellipse(x,y):
+    if (x**2/(a+b)**2)+(y**2/(2*b)**2) <= 1 : return True
+    else: return False
+
+def iterate_phi(phi_i, x, y):
+    return math.atan(((a**2-b**2)*math.sin(phi_i)+y*b)/(x*a))
+
+def find_phi(x,y):
+    phi = 0
+    new_phi = iterate_phi(phi, x, y)
+    while math.fabs(phi-new_phi) >= 0.000000001:
+        phi = new_phi
+        new_phi = iterate_phi(phi, x, y)
+
+    return new_phi
+
+def find_distance(x,y):
+    if x == 0:
+        return math.fabs(y-b)
+    phi = find_phi(x,y)
+    return math.sqrt( (x-a*math.cos(phi))**2 + (y-b*math.sin(phi))**2 )
+
+def in_cut_ellipse_exc_area(x,y,cut):
+    a_c = a*cut
+    b_c = math.sqrt(b**2*(1-cut**2))
+    
+    #A0
+    if x == 0:
+        if y < b + radius: return True
+        else: return False
+    
+    #A1    
+    if in_ellipse(x,y) and x <= a_c: return True    
+    
+    phi = find_phi(x,y)
+    min_phi = math.atan2(a_c,b_c)
+    
+    #A2
+    if phi >= min_phi: 
+        if math.sqrt( (x-a*math.cos(phi))**2 + (y-b*math.sin(phi))**2 ) <= radius: return True
+        else: return False
+    if y <= b_c and x <= (a_c + radius): return True
+    if y > b_c and ((x-a_c)**2 + (y-b_c)**2) <= radius ** 2: return True
+    return False
+        
+
+total_points = max_x * max_y
+i = 0
+j = 0 
+
+def check_full_ellipse():
+    global i, j
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if in_ellipse(coord[0],coord[1]): i += 1
+        elif find_distance(coord[0],coord[1]) <= radius: 
+            i += 1
+            # if not in_extended_ellipse(coord[0],coord[1]): j += 1
+            
+def check_cut_ellipse(cut):
+    global i
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if in_cut_ellipse_exc_area(coord[0],coord[1],cut): i += 1
+        
+
+#check_cut_ellipse(1)
+x= 1
+y = 3
+print 'a = ', a
+print 'b = ', b
+print in_ellipse(x,y)
+print find_phi(x,y)
+print 'specific excluded area = ', (i*4)/ellipse_area #, '(', extended_area/ellipse_area , ')'
+print time.clock()
