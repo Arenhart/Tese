@@ -1,0 +1,90 @@
+'''
+Created on 29/07/2014
+
+@author: Rafael
+'''
+
+from __future__ import division
+import numpy as np
+import math as mtm
+
+def sqrt(x):
+    return x**0.5
+
+def disk_disk_contact(a1 = (0,1,0), p1=(0,0,0), a2 = (1,0,0), p2 = (0,0,0), r1= 1, r2 = 1):
+    
+    A1, B1, C1 = a1[0], a1[1], a1[2]
+    A2, B2, C2 = a2[0], a2[1], a2[2]
+    alfa1, beta1, gama1 = p1[0], p1[1], p1[2]
+    alfa2, beta2, gama2 = p2[0], p2[1], p2[2]
+    
+    scalar3 = sqrt( 1 - (A1*A2 + B1*B2 + C1*C2)**2)
+    if scalar3 ==0: return False
+    A3 = (B1*C2-C1*B2)/scalar3
+    B3 = (C1*A2-A1*C2)/scalar3
+    C3 = (A1*B2-B1*A2)/scalar3
+    
+    scalar4 = sqrt( 1 - (A1*A3 + B1*B3 + C1*C3)**2)
+    A4 = (B1*C3-C1*B3)/scalar4
+    B4 = (C1*A3-A1*C3)/scalar4
+    C4 = (A1*B3-B1*A3)/scalar4 
+    
+    scalar5 = sqrt( 1 - (A2*A3 + B2*B3 + C2*C3)**2)
+    A5 = (B2*C3-C2*B3)/scalar5
+    B5 = (C2*A3-A2*C3)/scalar5
+    C5 = (A2*B3-B2*A3)/scalar5
+    
+    Dalfa, Dbeta, Dgama = alfa2-alfa1, beta2-beta1, gama2-gama1
+    K1 = B5*C3 + B3*C5
+    K2 = A3*C5 - A5*C3
+    K3 = A3*B5 - B3*A5
+    
+    denominator1 = ((-A4)*K1+B4*K2+C4*K3)
+    if denominator1 == 0: 
+        print "!"
+        return False
+    t1 = ((-Dalfa)*K1+Dbeta*K2+Dgama*K3) / denominator1
+    if abs(t1) > r1: return False
+    
+    denominator2 = (A3*B5 - A5*B3)
+    if denominator2 == 0: 
+        return False
+    t2 = (Dalfa*B3 - t1*A4*B3 - Dbeta*A3 + t1*A3*B4) / denominator2
+    if abs(t2) > r2: return False
+    
+    if C3 != 0: 
+        t3 = (Dgama - C4*t1 + C5*t2) / C3
+    elif B3 != 0:
+        t3 = (Dbeta-t1*B4+t2*B5)/B3
+    elif A3 != 0:
+        t3 = (Dalfa-t1*A4+t2*A5)/A3
+    else:
+        return False
+    if abs(t3) > sqrt(r1**2-(r1-abs(t1))**2) + sqrt(r2**2-(r2-abs(t2))**2): return False
+    
+    return True
+
+
+edge = 10
+results = []
+for j in range(400):
+    runs = 100000
+    disk1 = ((0,0,1),(edge/2,edge/2,edge/2))
+    t=0
+    for i in range(runs):
+        rho = -np.random.rand()*2*np.pi + np.pi  
+        theta = np.random.rand()*(np.pi/2)
+        d2_a = (mtm.sin(rho)*mtm.cos(theta),
+                mtm.cos(rho)*mtm.cos(theta),
+                mtm.sin(theta))
+        
+        disk2 = (d2_a,
+                 (np.random.rand()*edge,
+                  np.random.rand()*edge,
+                  np.random.rand()*edge))
+        
+
+        if disk_disk_contact(a1 = disk1[0], p1 = disk1[1], a2 = disk2[0], p2 = disk2[1]): t += 1
+    results.append( (t/runs)*edge**3)
+    
+print "media: ",np.average(results)," desvpad: ", np.std(results), " n: ", len(results)
