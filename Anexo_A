@@ -1,0 +1,78 @@
+'''
+Created on 13/09/2013
+
+@author: Rafael
+'''
+
+
+# import appropriate modules
+from __future__ import division
+from numpy import random
+from math import pi, sqrt
+import time
+import math
+import os
+import numpy as np
+from scipy import misc, ndimage
+
+def criar_desenho(N,res,phi,thick,model):
+    
+    '''
+    Function takes the input and saves a file on current directory
+    Input:
+    N --> The number of elements on each axis of the matrix
+    res --> resolution, each element of the matrix has 
+            res x res pixels
+    phi --> concentration of black elements, each element has a phi
+            probability of being black
+    thick --> only for bond percolation, the thickness of the line connecting the
+              elements. The line is one pixel wide with one extra pixel in either
+              side for each point of the thick variable
+    model --> must be either "bond" or "percolation", defines what kind of percolation
+              model is being illustrated
+              
+    '''
+    
+    if res%2 == 0: 
+        res = res+1
+        print 'resolucao deve ser impar, resolucao mudada para ' + str(res)
+        
+    if thick < 0:
+        thick = 0
+        print 'espessura deve ser maior ou igual a zero, espessura mudada para zero'
+        
+    if thick > (res-1)/2:
+        thick = (res-3)/2
+        print 'espessura maxima excedida, espessura reduzida para ' + str(thick)
+    
+    matriz = np.ones((N*res,N*res),dtype = bool)
+    
+    if model == 'site':
+        for coord in [(x,y) for x in range(N) for y in range(N)]:
+            if random.random() <= phi:
+                for pixel in [(x,y) for x in range(res) for y in range(res)]:
+                    matriz[res*coord[0]+pixel[0],res*coord[1]+pixel[1]] = 0
+                    
+    elif model == 'bond':
+        for coord in [(x,y) for x in range(N-1) for y in range(N-1)]:
+            if random.random() <= phi:
+                origem = (coord[0]*res + (res+1)/2 - thick, coord[1]*res + (res+1)/2 - thick)
+                for pixel in [(x,y) for x in range(res+1+2*thick) for y in range(2*thick+1)]:
+                    matriz[origem[0]+pixel[0],origem[1]+pixel[1]] = 0
+            if random.random() <= phi:
+                origem = (coord[0]*res + (res+1)/2 - thick, coord[1]*res + (res+1)/2 - thick)
+                for pixel in [(x,y) for x in range(2*thick+1) for y in range(res+1+2*thick)]:
+                    matriz[origem[0]+pixel[0],origem[1]+pixel[1]] = 0
+                    
+    else:
+        print 'erro, modelo nao encontrado'
+                    
+    misc.imsave(str(N) +'x' + str(N) + ' res' + str(res) + ' phi' + str(phi) + ' ' + model + '.bmp',matriz)
+        
+os.chdir('c:\\imagens\\dissertacao')
+direc = os.getcwd()
+print direc
+   
+   
+figura_matriz = criar_desenho(10,21,0.5,3,'site')
+
