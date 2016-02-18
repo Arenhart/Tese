@@ -1,0 +1,208 @@
+'''
+Created on 19/12/2015
+
+@author: Rafael
+'''
+
+
+from __future__ import division
+from math import exp, log10
+
+
+class CapacitanceFit():
+    
+    def __init__(self, t_set, V_set, I = 0.2*10**-9, initial_step = 100000, tolerance = 10**-80, initial_K3 = 10, initial_K4 = 35, initial_K5 = 10):
+        self.set = zip(t_set,V_set)
+        self.I = I
+        self.tolerance = tolerance
+        self.K3 = initial_K3
+        self.K4 = initial_K4
+        self.K5 = initial_K5
+        self.step_K3 = self.step_K4 = self.step_K5 = initial_step
+    
+    def V(self, t):
+        
+        return self.K5-self.K3*exp(-t/self.K4)
+    
+    def custom_V(self, K3, K4, K5, t):
+        
+        return K5-K3*exp(-t/K4)
+    
+    def dQdK3(self, t, Vi):
+        e = exp(-t/self.K4)
+        return (-2) * (self.K5-self.K3*e-Vi) * e
+    
+    def dQdK4(self, t, Vi):
+        e = exp(-t/self.K4)
+        return (-2) * (self.K5 - self.K3**e-Vi)*self.K3*t*e*(self.K4**(-2))
+    
+    def dQdK5(self, t, Vi):
+        e = exp(-t/self.K4)
+        return 2*(self.K5-self.K3*e-Vi)
+        
+    def calc_gradK3(self):
+        grad = 0
+        for t, Vi in self.set:
+            grad += self.dQdK3(t=t, Vi=Vi)
+            
+        return grad
+    
+    def calc_gradK4(self):
+        grad = 0
+        for t, Vi in self.set:
+            grad += self.dQdK4(t=t, Vi=Vi)
+            
+        return grad
+    
+    def calc_gradK5(self):
+        grad = 0
+        for t, Vi in self.set:
+            grad += self.dQdK5(t=t, Vi=Vi)
+            
+        return grad
+        
+    def calc_SSE(self):
+        SSE = 0
+        
+        for t, Vi in self.set:
+            SSE += (Vi - self.V(t = t))**2
+                           
+        return SSE
+        
+    def calc_next_SSE(self):
+        SSE = 0
+        
+        nextK3 = self.K3 - self.step_K3 * self.calc_gradK3()
+        nextK4 = self.K4 - self.step_K4 * self.calc_gradK4()
+        nextK5 = self.K5 - self.step_K5 * self.calc_gradK5()
+        
+        for t, Vi in self.set:
+            SSE += (Vi - self.custom_V(t = t, K3 = nextK3, K4 = nextK4, K5 = nextK5))**2
+                                      
+        return SSE
+    
+    def adjust_parameters(self):
+        self.K3 -= self.step_K3 * self.calc_gradK3()
+        self.K4 -= self.step_K4 * self.calc_gradK4()
+        self.K5 -= self.step_K5 * self.calc_gradK5()
+        
+        
+        
+    def iterate(self):
+        
+        current_SSE = self.calc_SSE()
+        initial_K3 = self.K3
+        initial_K4 = self.K4
+        initial_K5 = self.K5
+        backtracked = False
+        
+        self.step_K3 *= 2
+        self.step_K4 *= 2
+        self.step_K5 *= 2
+        while current_SSE > self.calc_next_SSE():           
+            self.step_K3 *= 2
+            self.step_K4 *= 2
+            self.step_K5 *= 2
+            backtracked = True
+            print self.step_K3, self.step_K4, self.step_K5, self.calc_next_SSE()
+        self.step_K3 /= 2
+        self.step_K4 /= 2
+        self.step_K5 /= 2
+        
+        while current_SSE < self.calc_next_SSE():           
+            self.step_K3 /= 2
+            self.step_K4 /= 2
+            self.step_K5 /= 2
+            backtracked = True
+            print self.step_K3, self.step_K4, self.step_K5, self.calc_next_SSE()
+            
+        current_SSE = self.calc_next_SSE()
+        print current_SSE
+        self.step_K3 *= 2
+        while current_SSE > self.calc_next_SSE():
+            print 'K3', self.step_K3, current_SSE, self.calc_next_SSE()
+            current_SSE = self.calc_next_SSE()
+            self.step_K3 *= 2
+        self.step_K3 /= 2 
+        
+        current_SSE = self.calc_next_SSE()
+        
+        
+        self.step_K4 *= 2
+        while current_SSE > self.calc_next_SSE():
+            print 'K4', self.step_K4, self.calc_next_SSE()
+            current_SSE = self.calc_next_SSE()
+            self.step_K4 *= 2
+        self.step_K4 /= 2
+        
+        current_SSE = self.calc_next_SSE()
+        
+        self.step_K5 *= 2
+        while current_SSE > self.calc_next_SSE():
+            print 'K5', self.step_K5, self.calc_next_SSE()
+            current_SSE = self.calc_next_SSE()
+            self.step_K5 *= 2
+        self.step_K5 /= 2
+        
+        current_SSE = self.calc_next_SSE()
+        
+        self.adjust_parameters()
+        
+        self.step_K3 *= 2
+        self.step_K4 *= 2
+        self.step_K5 *= 2
+        
+        print self.step_K3, self.step_K4, self.step_K5
+        print current_SSE, self.K3, self.K4, self.K5
+        if backtracked == True and abs((initial_K3 - self.K3)/self.K3) < self.tolerance and abs((initial_K4 - self.K4)/self.K4) < self.tolerance and abs((initial_K5 - self.K5)/self.K5) < self.tolerance:
+            print 'final SSE', current_SSE
+            return False
+        else:
+            return True
+        
+    def fit(self):
+        while self.iterate():
+            pass
+        
+        for t, _ in self.set:
+            print t, self.V(t)
+            
+        R = self.K5/self.I
+        C = self.K4/R
+        
+        return {"K3" : self.K3, "K4" : self.K4, "K5": self.K5, "R": R, "C": C}
+        
+
+     
+                
+valores_V =    (1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10)
+
+valores_t = (2.69,
+             6.02,
+             9.41,
+             14.56,
+             20.68,
+             30.1,
+             46.51,
+             88.52,
+             189.67,
+             280)
+        
+        
+
+    
+test = CapacitanceFit(t_set = valores_t, V_set = valores_V)
+
+
+print test.fit()
+
+    
