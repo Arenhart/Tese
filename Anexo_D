@@ -1,0 +1,253 @@
+'''
+Created on 10/09/2014
+
+@author: Rafael
+'''
+from __future__ import division
+from PIL import Image
+import math
+import time
+
+print time.clock()
+
+ASPECT_RATIO = 1.4 # AR = a/b
+MAX_SIZE = 100000
+
+b = math.sqrt(MAX_SIZE/ASPECT_RATIO) # minor axis
+a = b*ASPECT_RATIO # major axis
+radius = b
+ellipse_area = math.pi*a*b
+extended_area = math.pi*(b+a)*(2*b)
+max_x = int(math.ceil(a + b))
+max_y = int(math.ceil(2*b))
+
+# adjusted equation for excluded area: exc_a = 2,29 + 1,71*Asp_ratio^-1,25
+
+def in_ellipse(x,y):
+    if (x**2/a**2)+(y**2/b**2) <= 1 : return True
+    else: return False
+
+def in_extended_ellipse(x,y):
+    if (x**2/(a+b)**2)+(y**2/(2*b)**2) <= 1 : return True
+    else: return False
+
+def iterate_phi(phi_i, x, y):
+    return math.atan(((a**2-b**2)*math.sin(phi_i)+y*b)/(x*a))
+  
+def find_phi(x,y):
+    phi = math.atan2(x,y)
+    new_phi = iterate_phi(phi, x, y)
+    while math.fabs(phi-new_phi) >= 0.0000000001:
+        phi = new_phi
+        new_phi = iterate_phi(phi, x, y)
+
+    return new_phi
+
+def SD(x_i,xp,yp,a,b):
+    # squared distance
+    y = b*math.sqrt(1-(x_i/a)**2)
+    return (y-yp)**2 + (x_i-xp)**2
+
+def SD1(x_i,xp,yp,a,b):
+    #first derivative of squared distance
+    y = b*math.sqrt(1-(x_i/a)**2)
+    return x_i*((-2*b**2)/(a**2)+(2*y*yp)/(a**2-x_i**2)+2)-2*xp
+
+def SD2(x_i,xp,yp,a,b):
+    #second derivative of squared distance
+    y = b*math.sqrt(1-(x_i/a)**2)
+    return (2*(a**4 + a**2 * (b*y-2*x_i**2) +x_i**4)) / (a**2-x_i**2)**2 - (2*b**2)/a**2
+
+def find_real_phi(x,y):
+    
+    if y == 0: return 0
+    x_i = 0
+    count = 0
+    while 1:
+        new_x = x_i - SD1(x_i,x,y,a,b)/SD2(x_i,x,y,a,b)
+        if math.fabs(x_i - new_x) <= 0.0000000001 : break
+        x_i = new_x
+        if x_i >= a: 
+            x_i = a*0.9999999
+        count += 1
+        if count > 10000: 
+            count = 0
+            print "Stuck!"
+        
+    y_i = b*math.sqrt(1-(x_i/a)**2)
+    return math.atan2(y_i,x_i)
+
+def find_closest_point_in_ellipse(x,y):
+    
+    x_i = 0
+    count = 0
+    while 1:
+        new_x = x_i - SD1(x_i,x,y,a,b)/SD2(x_i,x,y,a,b)
+        if math.fabs(x_i - new_x) <= 0.00000001 : break
+        x_i = new_x
+        if x_i >= a: 
+            x_i = a*0.9999999
+        count += 1
+        if count > 10000: 
+            count = 0
+            print "Stuck!"
+        
+    y_i = b*math.sqrt(1-(x_i/a)**2)
+    return (x_i, y_i)
+
+def find_distance(x,y):
+    # finds shortest distance from a point (x,y) to the ellipse
+    if x == 0:
+        return math.fabs(y-b)
+    closest_point = find_closest_point_in_ellipse(x,y)
+    x_p, y_p = closest_point[0], closest_point[1]
+    return math.sqrt((x_p - x)**2 + (y_p - y) **2)
+
+def find_squared_distance(x,y):
+    if x == 0:
+        return math.fabs(y-b)
+    closest_point = find_closest_point_in_ellipse(x,y)
+    x_p, y_p = closest_point[0], closest_point[1]
+    return (x_p - x)**2 + (y_p - y) **2
+
+def in_cut_ellipse_exc_area(x,y,cut):
+    a_c = a*cut
+    b_c = math.sqrt(b**2*(1-cut**2))
+    
+    #A0
+    if x == 0:
+        if y <= (b + radius): return 1
+        else: return 0
+
+    #A1
+    if in_ellipse(x,y):
+        if x <= (a_c): return 1
+        if x <= (a_c + radius): return 2
+        else: return 0
+
+    phi_min = math.atan(b_c/a_c)
+    phi = find_real_phi(x,y)
+    
+    #A2
+    if phi >= phi_min:
+        if find_squared_distance(x,y) <= radius**2 : return 3
+        else: return 0
+
+
+    #A3
+    if y >= b_c:
+        if ((a_c - x)**2 + (b_c - y)**2) <= radius **2 : return 4
+        else: return 0
+
+    #A4
+    if x <= (a_c + radius): return 5
+    else: return 0
+
+
+def in_left_cut_ellipse_exc_area(x,y,cut):
+    p = a*cut
+    q = math.sqrt(b**2*(1-cut**2))
+
+    #A0  
+    if x == 0:
+        if y <= q and p <= b: return 1
+        else: return 0
+        
+    #A1
+    if in_ellipse(x,y) and x >= p: return 1
+    
+    #A2a
+    if x <= p and y <= q:
+        if p-b <= x: return 2
+        else: return 0
+        
+    #A2b
+    if in_ellipse(x,y):
+        if (x-p)**2 + (y-q)**2 <= b**2: return 3
+        else: return 0
+    
+    phi_max = math.atan2(q,p)
+    phi = find_real_phi(x,y)
+        
+    #A3
+    if phi <= phi_max:
+        if find_distance(x,y) <= b: return 4
+        else: return 0
+        
+    #A4
+    if phi > phi_max:
+        if (x-p)**2 + (y-q)**2 <= b**2: return 5
+        else: return 0
+        
+    print 'error'
+
+
+
+def check_full_ellipse():
+    ite = 0
+    im = Image.new("1", (max_x,max_y), 1)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if in_ellipse(coord[0],coord[1]): 
+            ite += 1
+            im.putpixel((coord[0],coord[1]),0)
+        elif find_distance(coord[0],coord[1]) <= radius:
+            ite += 1
+            im.putpixel((coord[0],coord[1]),0)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if (coord[0]**2/(a)**2)+(coord[1]**2/(b)**2) <= 1: 
+            im.putpixel((coord[0],coord[1]),1)
+    print "Specific excluded area: " + str((4*ite)/(math.pi*a*b))
+    im.save("im_test_full.bmp")
+
+def check_cut_ellipse(cut):
+    ite = 0
+    im = Image.new("L", (max_x,max_y), 256)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        check = in_cut_ellipse_exc_area(coord[0],coord[1],cut)
+        if check > 0: 
+            ite += 1
+            im.putpixel((coord[0],coord[1]),(check-1)*50)
+    print "cut: " + str(cut) + ";  Specific excluded area: " + str((4*ite)/(math.pi*a*b))
+    im.save("im_test_cut.bmp")
+    
+def check_left_cut_ellipse(cut):
+    ite = 0
+    im = Image.new("L", (max_x,max_y), 256)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        check = in_left_cut_ellipse_exc_area(coord[0],coord[1],cut)
+        if check > 0: 
+            ite += 1
+            im.putpixel((coord[0],coord[1]),(check-1)*50)
+    print "cut: " + str(cut) + ";  Specific excluded area: " + str((2*ite)/(math.pi*a*b))
+    im.save("im_test_left_cut" + str(int(cut*100)) + ".bmp")
+    
+def check_ellipse():
+    im = Image.new("1", (max_x,max_y), 1)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if (coord[0]**2/(a+b)**2)+(coord[1]**2/(b+b)**2) <= 1: 
+            im.putpixel((coord[0],coord[1]),0)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if (coord[0]**2/(a)**2)+(coord[1]**2/(b)**2) <= 1: 
+            im.putpixel((coord[0],coord[1]),1)
+    im.save("im_test_elip.bmp")
+    
+def check_ellipse_simple():
+    im = Image.new("1", (max_x,max_y), 1)
+    for coord in [(x,y) for x in range(max_x) for y in range(max_y)]:
+        if (coord[0]**2/(a)**2)+(coord[1]**2/(b)**2) <= 1: 
+            im.putpixel((coord[0],coord[1]),0)
+    im.save("im_test_simp.bmp")
+
+
+print a, b
+print max_x, max_y
+print find_real_phi(120, 60)
+
+check_left_cut_ellipse(0.02)
+check_left_cut_ellipse(0.05)
+check_left_cut_ellipse(0.07)
+for i in range(10):   
+    check_left_cut_ellipse(i*0.1+0.1)
+
+print time.clock()
+
